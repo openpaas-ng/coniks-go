@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/url"
 	"os"
@@ -18,6 +17,7 @@ import (
 	"github.com/coniks-sys/coniks-go/crypto/vrf"
 	"github.com/coniks-sys/coniks-go/protocol"
 	"github.com/coniks-sys/coniks-go/utils"
+	"github.com/uber-go/zap"
 )
 
 // A ServerConfig contains configuration values
@@ -30,7 +30,8 @@ type ServerConfig struct {
 	// Policies contains the server's CONIKS policies configuration.
 	Policies *ServerPolicies `toml:"policies"`
 	// Addresses contains the server's connections configuration.
-	Addresses      []*Address `toml:"addresses"`
+	Addresses      []*Address          `toml:"addresses"`
+	Logger         *utils.LoggerConfig `toml:"logger"`
 	configFilePath string
 }
 
@@ -81,6 +82,8 @@ type ServerPolicies struct {
 // a mechanism to update the underlying ConiksDirectory automatically
 // at regular time intervals.
 type ConiksServer struct {
+	logger zap.Logger
+
 	sync.RWMutex
 	dir *protocol.ConiksDirectory
 
@@ -131,6 +134,9 @@ func LoadServerConfig(file string) (*ServerConfig, error) {
 		addr.TLSCertPath = utils.ResolvePath(addr.TLSCertPath, file)
 		addr.TLSKeyPath = utils.ResolvePath(addr.TLSKeyPath, file)
 	}
+	// logger config
+	conf.Logger.Path = utils.ResolvePath(conf.Logger.Path, file)
+
 	return &conf, nil
 }
 
@@ -139,6 +145,7 @@ func LoadServerConfig(file string) (*ServerConfig, error) {
 func NewConiksServer(conf *ServerConfig) *ConiksServer {
 	// create server instance
 	server := new(ConiksServer)
+	server.logger = utils.NewLog(conf.Logger)
 	server.dir = protocol.NewDirectory(
 		conf.Policies.EpochDeadline,
 		conf.Policies.vrfKey,
@@ -177,14 +184,14 @@ func (server *ConiksServer) Run(addrs []*Address) {
 			if addr.AllowRegistration {
 				verb = "Accepting registrations"
 			}
-			log.Printf("[info] %s on %s\n", verb, addr.Address)
+			server.logger.Info(verb, zap.String("address", addr.Address))
 			server.handleRequests(ln, tlsConfig, server.makeHandler(perms))
 			server.waitStop.Done()
 		}()
 	}
 
 	if !hasRegistrationPerm {
-		log.Println("[warning] None of the addresses permit registration")
+		server.logger.Warn("None of the addresses permit registration")
 	}
 
 	server.waitStop.Add(1)
@@ -217,15 +224,15 @@ func (server *ConiksServer) updatePolicies() {
 			// read server policies from config file
 			conf, err := LoadServerConfig(server.configFilePath)
 			if err != nil {
-				log.Println(err)
 				// error occured while reading server config
 				// simply abort the reloading policies process
+				server.logger.Error(err.Error())
 				return
 			}
 			server.Lock()
 			server.dir.SetPolicies(conf.Policies.EpochDeadline)
 			server.Unlock()
-			log.Println("[info] Policies reloaded!")
+			server.logger.Info("Policies reloaded!")
 		}
 	}
 }
