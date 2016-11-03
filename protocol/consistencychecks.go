@@ -11,6 +11,8 @@ import (
 
 	"github.com/coniks-sys/coniks-go/crypto/sign"
 	m "github.com/coniks-sys/coniks-go/merkletree"
+	"github.com/coniks-sys/coniks-go/protocol/extension/ext"
+	"github.com/coniks-sys/coniks-go/protocol/extension/tb"
 )
 
 // ConsistencyChecks stores the latest consistency check
@@ -26,9 +28,7 @@ import (
 type ConsistencyChecks struct {
 	SavedSTR *m.SignedTreeRoot
 
-	// extensions settings
-	useTBs bool
-	TBs    map[string]*TemporaryBinding
+	TBs ext.PromiseSigner
 
 	// signing key
 	signKey sign.PublicKey
@@ -38,18 +38,15 @@ type ConsistencyChecks struct {
 // a CONIKS directory's pinned STR at epoch 0, or
 // the consistency state read from persistent storage.
 func NewCC(savedSTR *m.SignedTreeRoot, useTBs bool, signKey sign.PublicKey) *ConsistencyChecks {
-	// TODO: see #110
-	if !useTBs {
-		panic("[coniks] Currently the server is forced to use TBs")
-	}
 	cc := &ConsistencyChecks{
 		SavedSTR: savedSTR,
-		useTBs:   useTBs,
 		signKey:  signKey,
 	}
-	if useTBs {
-		cc.TBs = make(map[string]*TemporaryBinding)
+	tb, err := ext.NewPromiseSigner(tb.PromiseSignerID)
+	if err != nil {
+		panic(err)
 	}
+	cc.TBs = tb
 	return cc
 }
 
@@ -176,7 +173,7 @@ func (cc *ConsistencyChecks) verifyRegistration(msg *Response,
 	proofType := ap.ProofType()
 	switch {
 	case msg.Error == ReqNameExisted && proofType == m.ProofOfInclusion:
-	case msg.Error == ReqNameExisted && proofType == m.ProofOfAbsence && cc.useTBs:
+	case msg.Error == ReqNameExisted && proofType == m.ProofOfAbsence:
 	case msg.Error == ReqSuccess && proofType == m.ProofOfAbsence:
 	default:
 		return ErrMalformedDirectoryMessage
@@ -200,7 +197,7 @@ func (cc *ConsistencyChecks) verifyKeyLookup(msg *Response,
 	case msg.Error == ReqNameNotFound && proofType == m.ProofOfAbsence:
 	// FIXME: This would be changed when we support key changes
 	case msg.Error == ReqSuccess && proofType == m.ProofOfInclusion:
-	case msg.Error == ReqSuccess && proofType == m.ProofOfAbsence && cc.useTBs:
+	case msg.Error == ReqSuccess && proofType == m.ProofOfAbsence:
 	default:
 		return ErrMalformedDirectoryMessage
 	}
@@ -238,9 +235,6 @@ func verifyAuthPath(uname string, key []byte,
 
 func (cc *ConsistencyChecks) updateTBs(requestType int, msg *Response,
 	uname string, key []byte) error {
-	if !cc.useTBs {
-		return nil
-	}
 	switch requestType {
 	case RegistrationType:
 		df := msg.DirectoryResponse.(*DirectoryProof)

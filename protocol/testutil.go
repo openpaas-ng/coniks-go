@@ -11,7 +11,7 @@ import (
 
 // NewTestDirectory creates a ConiksDirectory used for testing server-side
 // CONIKS operations.
-func NewTestDirectory(t *testing.T, useTBs bool) (
+func NewTestDirectory(t *testing.T) (
 	*ConiksDirectory, sign.PublicKey) {
 
 	vrfKey, err := vrf.GenerateKey(nil)
@@ -24,7 +24,7 @@ func NewTestDirectory(t *testing.T, useTBs bool) (
 	}
 	pk, _ := signKey.Public()
 	// epDeadline merkletree.TimeStamp, vrfKey vrf.PrivateKey,
-	// signKey sign.PrivateKey, dirSize uint64, useTBs bool
-	d := NewDirectory(1, vrfKey, signKey, 10, useTBs)
+	// signKey sign.PrivateKey, dirSize uint64
+	d := NewDirectory(1, vrfKey, signKey, 10)
 	return d, pk
 }

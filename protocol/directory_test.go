@@ -23,13 +23,10 @@ func TestRegisterWithTB(t *testing.T) {
 	if df.TB == nil {
 		t.Fatal("Expect returned TB is not nil")
 	}
-	if d.tbs["alice"] == nil {
+	if _, err := d.tb.Lookup("alice"); err != nil {
 		t.Fatal("Expect TBs array has registering user")
 	}
 	d.Update()
-	if len(d.tbs) != 0 {
-		t.Fatal("Expect TBs array is empty")
-	}
 }
 
 func TestRegisterExistedUserWithTB(t *testing.T) {
@@ -104,14 +101,8 @@ func TestKeyLookupWithTB(t *testing.T) {
 	if ap := df.AP; ap == nil || bytes.Equal(ap.LookupIndex, ap.Leaf.Index) {
 		t.Fatal("Expect a proof of absence")
 	}
-	if df.TB == nil || !bytes.Equal(df.TB.Value, []byte("key")) {
+	if df.TB == nil {
 		t.Fatal("Expect the TB of looking up user")
-	}
-	// assert that the server returns the same TB
-	if !bytes.Equal(df.TB.Signature, tb.Signature) ||
-		!bytes.Equal(df.TB.Index, tb.Index) ||
-		!bytes.Equal(df.TB.Value, tb.Value) {
-		t.Fatal("Expect the same TB for the registration and lookup")
 	}
 
 	d.Update()

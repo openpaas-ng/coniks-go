@@ -8,12 +8,15 @@
 
 package protocol
 
+// FIXME: protocol shouldn't aware of any subpackages in extension except ext.
 import (
 	"bytes"
 
 	"github.com/coniks-sys/coniks-go/crypto/sign"
 	"github.com/coniks-sys/coniks-go/crypto/vrf"
 	"github.com/coniks-sys/coniks-go/merkletree"
+	"github.com/coniks-sys/coniks-go/protocol/extension/ext"
+	"github.com/coniks-sys/coniks-go/protocol/extension/tb"
 )
 
 // A ConiksDirectory maintains the underlying persistent
@@ -25,9 +28,9 @@ import (
 // protocol extension in a future release.
 type ConiksDirectory struct {
 	pad      *merkletree.PAD
-	useTBs   bool
-	tbs      map[string]*TemporaryBinding
 	policies *Policies
+
+	tb ext.PromiseSigner
 }
 
 // NewDirectory constructs a new ConiksDirectory given the key server's PAD
@@ -39,11 +42,7 @@ type ConiksDirectory struct {
 // useTBs indicates whether the key server returns TBs upon a successful
 // registration.
 func NewDirectory(epDeadline Timestamp, vrfKey vrf.PrivateKey,
-	signKey sign.PrivateKey, dirSize uint64, useTBs bool) *ConiksDirectory {
-	// FIXME: see #110
-	if !useTBs {
-		panic("Currently the server is forced to use TBs")
-	}
+	signKey sign.PrivateKey, dirSize uint64) *ConiksDirectory {
 	d := new(ConiksDirectory)
 	vrfPublicKey, ok := vrfKey.Public()
 	if !ok {
@@ -55,10 +54,11 @@ func NewDirectory(epDeadline Timestamp, vrfKey vrf.PrivateKey,
 		panic(err)
 	}
 	d.pad = pad
-	d.useTBs = useTBs
-	if useTBs {
-		d.tbs = make(map[string]*TemporaryBinding)
+	tb, err := ext.NewPromiseSigner(tb.PromiseSignerID)
+	if err != nil {
+		panic(err)
 	}
+	d.tb = tb
 	return d
 }
 
@@ -69,9 +69,7 @@ func NewDirectory(epDeadline Timestamp, vrfKey vrf.PrivateKey,
 func (d *ConiksDirectory) Update() {
 	d.pad.Update(d.policies)
 	// clear issued temporary bindings
-	for key := range d.tbs {
-		delete(d.tbs, key)
-	}
+	d.tb.Clear()
 }
 
 // SetPolicies sets this ConiksDirectory's epoch deadline, which will be used
@@ -95,13 +93,11 @@ func (d *ConiksDirectory) LatestSTR() *merkletree.SignedTreeRoot {
 // NewTB computes the private index corresponding to the name, and
 // generates a digital signature of the index, the given key, and the latest STR
 // signature.
-func (d *ConiksDirectory) NewTB(name string, key []byte) *TemporaryBinding {
+func (d *ConiksDirectory) NewTB(name string, key []byte) ext.Promise {
 	index := d.pad.Index(name)
-	return &TemporaryBinding{
-		Index:     index,
-		Value:     key,
-		Signature: d.pad.Sign(d.LatestSTR().Signature, index, key),
-	}
+	tb := d.tb.Issue(name, index, key,
+		d.pad.Sign(d.LatestSTR().Signature, index, key))
+	return tb
 }
 
 // Register inserts the username-to-key mapping contained in a
@@ -145,24 +141,16 @@ func (d *ConiksDirectory) Register(req *RegistrationRequest) (
 		return NewRegistrationProof(ap, d.LatestSTR(), nil, ReqNameExisted)
 	}
 
-	var tb *TemporaryBinding
-
-	if d.useTBs {
-		// also check the temporary bindings array
-		// currently the server allows only one registration/key change per epoch
-		if tb = d.tbs[req.Username]; tb != nil {
-			return NewRegistrationProof(ap, d.LatestSTR(), tb, ReqNameExisted)
-		}
-		tb = d.NewTB(req.Username, req.Key)
+	if tb, err := d.tb.Lookup(req.Username); err != nil {
+		return NewRegistrationProof(ap, d.LatestSTR(), tb, ReqNameExisted)
 	}
 
 	if err = d.pad.Set(req.Username, req.Key); err != nil {
 		return NewErrorResponse(ErrDirectory), ErrDirectory
 	}
 
-	if tb != nil {
-		d.tbs[req.Username] = tb
-	}
+	tb := d.NewTB(req.Username, req.Key)
+
 	return NewRegistrationProof(ap, d.LatestSTR(), tb, ReqSuccess)
 }
 
@@ -206,10 +194,8 @@ func (d *ConiksDirectory) KeyLookup(req *KeyLookupRequest) (
 		return NewKeyLookupProof(ap, d.LatestSTR(), nil, ReqSuccess)
 	}
 	// if not found in the tree, do lookup in tb array
-	if d.useTBs {
-		if tb := d.tbs[req.Username]; tb != nil {
-			return NewKeyLookupProof(ap, d.LatestSTR(), tb, ReqSuccess)
-		}
+	if tb, err := d.tb.Lookup(req.Username); err == nil {
+		return NewKeyLookupProof(ap, d.LatestSTR(), tb, ReqSuccess)
 	}
 	return NewKeyLookupProof(ap, d.LatestSTR(), nil, ReqNameNotFound)
 }

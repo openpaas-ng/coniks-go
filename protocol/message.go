@@ -5,6 +5,7 @@
 package protocol
 
 import m "github.com/coniks-sys/coniks-go/merkletree"
+import "github.com/coniks-sys/coniks-go/protocol/extension/ext"
 
 // The types of requests CONIKS clients send during the CONIKS protocols.
 const (
@@ -105,7 +106,7 @@ type DirectoryResponse interface{}
 type DirectoryProof struct {
 	AP  *m.AuthenticationPath
 	STR *m.SignedTreeRoot
-	TB  *TemporaryBinding `json:",omitempty"`
+	TB  ext.Promise
 }
 
 // A DirectoryProofs response includes a list of authentication paths
@@ -137,7 +138,7 @@ var _ DirectoryResponse = (*DirectoryProofs)(nil)
 // See directory.Register() for details on the contents of the created
 // DirectoryProof.
 func NewRegistrationProof(ap *m.AuthenticationPath, str *m.SignedTreeRoot,
-	tb *TemporaryBinding, e ErrorCode) (*Response, ErrorCode) {
+	tb ext.Promise, e ErrorCode) (*Response, ErrorCode) {
 	return &Response{
 		Error: e,
 		DirectoryResponse: &DirectoryProof{
@@ -158,7 +159,7 @@ func NewRegistrationProof(ap *m.AuthenticationPath, str *m.SignedTreeRoot,
 // See directory.KeyLookup() for details on the contents of the created
 // DirectoryProof.
 func NewKeyLookupProof(ap *m.AuthenticationPath, str *m.SignedTreeRoot,
-	tb *TemporaryBinding, e ErrorCode) (*Response, ErrorCode) {
+	tb ext.Promise, e ErrorCode) (*Response, ErrorCode) {
 	return &Response{
 		Error: e,
 		DirectoryResponse: &DirectoryProof{
