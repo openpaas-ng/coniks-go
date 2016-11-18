@@ -25,9 +25,14 @@ import (
 // subsequent responses from the ConiksDirectory to any
 // client request.
 type ConsistencyChecks struct {
+	// PinnedSTR stores the pinned signed tree root at epoch 0. This is hardcoded into the client.
+	PinnedSTR *m.SignedTreeRoot
 	// SavedSTR stores the latest verified signed tree root.
 	SavedSTR *m.SignedTreeRoot
+	// Bindings stores all the verified name-to-key bindings.
 	Bindings map[string][]byte
+	// RegEpoch keeps the registration epoch of each user. Entries are kept even the binding was inserted into the directory.
+	RegEpoch map[string]uint64
 
 	// extensions settings
 	useTBs bool
@@ -39,16 +44,21 @@ type ConsistencyChecks struct {
 // NewCC creates an instance of ConsistencyChecks using
 // a CONIKS directory's pinned STR at epoch 0, or
 // the consistency state read from persistent storage.
-func NewCC(savedSTR *m.SignedTreeRoot, useTBs bool, signKey sign.PublicKey) *ConsistencyChecks {
+// TODO: maybe remove savedSTR from the parameters
+// and have something like RestoreState(savedSTR, bindings, regepoch) instead.
+// Possibly it somehow relate to #137 (client storage).
+func NewCC(pinnedSTR, savedSTR *m.SignedTreeRoot, useTBs bool, signKey sign.PublicKey) *ConsistencyChecks {
 	// TODO: see #110
 	if !useTBs {
 		panic("[coniks] Currently the server is forced to use TBs")
 	}
 	cc := &ConsistencyChecks{
-		SavedSTR: savedSTR,
-		Bindings: make(map[string][]byte),
-		useTBs:   useTBs,
-		signKey:  signKey,
+		PinnedSTR: pinnedSTR,
+		SavedSTR:  savedSTR,
+		Bindings:  make(map[string][]byte),
+		RegEpoch:  make(map[string]uint64),
+		useTBs:    useTBs,
+		signKey:   signKey,
 	}
 	if useTBs {
 		cc.TBs = make(map[string]*TemporaryBinding)
@@ -113,13 +123,41 @@ func (cc *ConsistencyChecks) updateSTR(requestType int, msg *Response) error {
 		// FIXME: check whether the STR was issued on time and whatnot.
 		// Maybe it has something to do w/ #81 and client transitioning between epochs.
 		// Try to verify w/ what's been saved
-		if err := cc.verifySTR(str); err == nil {
+		if err := verifySTR(cc.SavedSTR, str); err == nil {
 			return nil
 		}
 		// Otherwise, expect that we've entered a new epoch
 		if err := cc.verifySTRConsistency(cc.SavedSTR, str); err != nil {
 			return err
 		}
+
+	case MonitoringType:
+		// the requested epoch can be equal to saved epoch or the next expected epoch
+		// or epoch 0.
+		strs := msg.DirectoryResponse.(*DirectoryProofs).STR
+		switch {
+		case strs[0].Epoch == 0: /* prior history verification */
+			if err := verifySTR(cc.PinnedSTR, strs[0]); err != nil {
+				return err
+			}
+		case strs[0].Epoch == cc.SavedSTR.Epoch:
+			if err := verifySTR(cc.SavedSTR, strs[0]); err != nil {
+				return err
+			}
+		case strs[0].Epoch == cc.SavedSTR.Epoch+1:
+			if err := cc.verifySTRConsistency(cc.SavedSTR, strs[0]); err != nil {
+				return err
+			}
+		default:
+			panic("[coniks] Passt.")
+		}
+
+		for i := 1; i < len(strs); i++ {
+			if err := cc.verifySTRConsistency(strs[i-1], strs[i]); err != nil {
+				return err
+			}
+		}
+		str = strs[len(strs)-1]
 
 	default:
 		panic("[coniks] Unknown request type")
@@ -130,10 +168,11 @@ func (cc *ConsistencyChecks) updateSTR(requestType int, msg *Response) error {
 	return nil
 }
 
-// verifySTR checks whether the received STR is the same with
-// the SavedSTR using reflect.DeepEqual().
-func (cc *ConsistencyChecks) verifySTR(str *m.SignedTreeRoot) error {
-	if reflect.DeepEqual(cc.SavedSTR, str) {
+// verifySTR checks whether the received signed tree root str
+// is the same with the saved signed tree root
+// (which can be SavedSTR or PinnedSTR) using reflect.DeepEqual().
+func verifySTR(savedSTR, str *m.SignedTreeRoot) error {
+	if reflect.DeepEqual(savedSTR, str) {
 		return nil
 	}
 	return CheckBadSTR
@@ -164,6 +203,8 @@ func (cc *ConsistencyChecks) checkConsistency(requestType int, msg *Response,
 		err = cc.verifyRegistration(msg, uname, key)
 	case KeyLookupType:
 		err = cc.verifyKeyLookup(msg, uname, key)
+	case MonitoringType:
+		err = cc.verifyMonitoring(msg, uname, key)
 	default:
 		panic("[coniks] Unknown request type")
 	}
@@ -215,6 +256,45 @@ func (cc *ConsistencyChecks) verifyKeyLookup(msg *Response,
 	return CheckPassed
 }
 
+func (cc *ConsistencyChecks) verifyMonitoring(msg *Response,
+	uname string, key []byte) error {
+	if msg.Error != ReqSuccess {
+		return ErrMalformedDirectoryMessage
+	}
+	dfs := msg.DirectoryResponse.(*DirectoryProofs)
+
+	str0 := dfs.STR[0]
+	ap0 := dfs.AP[0]
+	regEp, ok := cc.RegEpoch[uname]
+
+	switch {
+	case !ok && str0.Epoch == 0 && ap0.ProofType() == m.ProofOfAbsence: /* prior history verification */
+	case ok && str0.Epoch == regEp && ap0.ProofType() == m.ProofOfAbsence: /* registration epoch */
+	case ok && str0.Epoch >= regEp+1 && ap0.ProofType() == m.ProofOfInclusion: /* after registration */
+	default:
+		return CheckBadAuthPath
+	}
+	if err := verifyAuthPath(uname, key, ap0, str0); err != nil {
+		return err
+	}
+
+	for i := 1; i < len(dfs.STR); i++ {
+		str := dfs.STR[i]
+		ap := dfs.AP[i]
+		switch {
+		case str0.Epoch == 0 && ap.ProofType() == m.ProofOfAbsence: /* prior history verification */
+		case str0.Epoch > 0 && ap.ProofType() == m.ProofOfInclusion:
+		default:
+			return CheckBadAuthPath
+		}
+		if err := verifyAuthPath(uname, key, ap, str); err != nil {
+			return err
+		}
+	}
+
+	return CheckPassed
+}
+
 func verifyAuthPath(uname string, key []byte,
 	ap *m.AuthenticationPath,
 	str *m.SignedTreeRoot) error {
@@ -260,6 +340,7 @@ func (cc *ConsistencyChecks) updateTBs(requestType int, msg *Response,
 				return err
 			}
 			cc.TBs[uname] = df.TB
+			cc.RegEpoch[uname] = cc.SavedSTR.Epoch
 		}
 		return nil
 
@@ -270,16 +351,32 @@ func (cc *ConsistencyChecks) updateTBs(requestType int, msg *Response,
 		proofType := ap.ProofType()
 		switch {
 		case msg.Error == ReqSuccess && proofType == m.ProofOfInclusion:
-			if err := cc.verifyFulfilledPromise(uname, str, ap); err != nil {
-				return err
+			if str.Epoch == cc.RegEpoch[uname]+1 {
+				if err := cc.verifyFulfilledPromise(uname, str, ap); err != nil {
+					return err
+				}
+				delete(cc.TBs, uname)
 			}
-			delete(cc.TBs, uname)
 
 		case msg.Error == ReqSuccess && proofType == m.ProofOfAbsence:
 			if err := cc.verifyReturnedPromise(df, key); err != nil {
 				return err
 			}
 			cc.TBs[uname] = df.TB
+			cc.RegEpoch[uname] = cc.SavedSTR.Epoch
+		}
+
+	case MonitoringType:
+		dfs := msg.DirectoryResponse.(*DirectoryProofs)
+		if regEp, ok := cc.RegEpoch[uname]; ok {
+			if dfs.STR[0].Epoch == regEp+1 {
+				ap := dfs.AP[0]
+				str := dfs.STR[0]
+				if err := cc.verifyFulfilledPromise(uname, str, ap); err != nil {
+					return err
+				}
+				delete(cc.TBs, uname)
+			}
 		}
 
 	default:
@@ -293,7 +390,6 @@ func (cc *ConsistencyChecks) updateTBs(requestType int, msg *Response,
 func (cc *ConsistencyChecks) verifyFulfilledPromise(uname string,
 	str *m.SignedTreeRoot,
 	ap *m.AuthenticationPath) error {
-	// FIXME: Which epoch did this lookup happen in?
 	if tb, ok := cc.TBs[uname]; ok {
 		if !bytes.Equal(ap.LookupIndex, tb.Index) ||
 			!bytes.Equal(ap.Leaf.Value, tb.Value) {

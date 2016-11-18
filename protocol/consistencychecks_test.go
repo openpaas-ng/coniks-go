@@ -30,6 +30,17 @@ func lookupAndVerify(d *ConiksDirectory, cc *ConsistencyChecks,
 	return err, cc.HandleResponse(KeyLookupType, res, name, key)
 }
 
+func monitorAndVerify(d *ConiksDirectory, cc *ConsistencyChecks,
+	name string, key []byte, startEp, endEp uint64) error {
+	request := &MonitoringRequest{
+		Username:   name,
+		StartEpoch: startEp,
+		EndEpoch:   endEp,
+	}
+	res, _ := d.Monitor(request)
+	return cc.HandleResponse(MonitoringType, res, name, key)
+}
+
 func TestVerifyWithError(t *testing.T) {
 	d, pk := NewTestDirectory(t, true)
 
@@ -38,7 +49,7 @@ func TestVerifyWithError(t *testing.T) {
 	str.Signature = append([]byte{}, str.Signature...)
 	str.Signature[0]++
 
-	cc := NewCC(&str, true, pk)
+	cc := NewCC(d.LatestSTR(), &str, true, pk)
 
 	if e1, e2 := registerAndVerify(d, cc, alice, key); e1 != ReqSuccess || e2 != CheckBadSTR {
 		t.Error("Expect", ReqSuccess, "got", e1)
@@ -48,7 +59,7 @@ func TestVerifyWithError(t *testing.T) {
 
 func TestMalformedClientMessage(t *testing.T) {
 	d, pk := NewTestDirectory(t, true)
-	cc := NewCC(d.LatestSTR(), true, pk)
+	cc := NewCC(d.LatestSTR(), d.LatestSTR(), true, pk)
 
 	request := &RegistrationRequest{
 		Username: "", // invalid username
@@ -62,7 +73,7 @@ func TestMalformedClientMessage(t *testing.T) {
 
 func TestMalformedDirectoryMessage(t *testing.T) {
 	d, pk := NewTestDirectory(t, true)
-	cc := NewCC(d.LatestSTR(), true, pk)
+	cc := NewCC(d.LatestSTR(), d.LatestSTR(), true, pk)
 
 	request := &RegistrationRequest{
 		Username: "alice",
@@ -79,7 +90,7 @@ func TestMalformedDirectoryMessage(t *testing.T) {
 func TestVerifyRegistrationResponseWithTB(t *testing.T) {
 	d, pk := NewTestDirectory(t, true)
 
-	cc := NewCC(d.LatestSTR(), true, pk)
+	cc := NewCC(d.LatestSTR(), d.LatestSTR(), true, pk)
 
 	if e1, e2 := registerAndVerify(d, cc, alice, key); e1 != ReqSuccess || e2 != CheckPassed {
 		t.Error(e1)
@@ -123,7 +134,7 @@ func TestVerifyRegistrationResponseWithTB(t *testing.T) {
 func TestVerifyFullfilledPromise(t *testing.T) {
 	d, pk := NewTestDirectory(t, true)
 
-	cc := NewCC(d.LatestSTR(), true, pk)
+	cc := NewCC(d.LatestSTR(), d.LatestSTR(), true, pk)
 
 	if e1, e2 := registerAndVerify(d, cc, alice, key); e1 != ReqSuccess || e2 != CheckPassed {
 		t.Error(e1)
@@ -164,7 +175,7 @@ func TestVerifyFullfilledPromise(t *testing.T) {
 func TestVerifyKeyLookupResponseWithTB(t *testing.T) {
 	d, pk := NewTestDirectory(t, true)
 
-	cc := NewCC(d.LatestSTR(), true, pk)
+	cc := NewCC(d.LatestSTR(), d.LatestSTR(), true, pk)
 
 	// do lookup first
 	if e1, e2 := lookupAndVerify(d, cc, alice, key); e1 != ReqNameNotFound || e2 != CheckPassed {
@@ -218,5 +229,131 @@ func TestVerifyKeyLookupResponseWithTB(t *testing.T) {
 	if e1, e2 := lookupAndVerify(d, cc, bob, key); e1 != ReqNameNotFound || e2 != CheckPassed {
 		t.Error(e1)
 		t.Error(e2)
+	}
+}
+
+func TestVerifyTimeSkew(t *testing.T) {
+	d, pk := NewTestDirectory(t, true)
+	cc := NewCC(d.LatestSTR(), d.LatestSTR(), true, pk)
+
+	N := 5
+
+	// verify prior history
+	for i := 0; i < N; i++ {
+		d.Update()
+	}
+	if err := monitorAndVerify(d, cc, alice, nil, cc.SavedSTR.Epoch, d.LatestSTR().Epoch); err != CheckPassed {
+		t.Error(err)
+	}
+
+	// register
+	if _, e2 := registerAndVerify(d, cc, alice, key); e2 != CheckPassed {
+		t.Error("Cannot register new binding")
+	}
+
+	// monitor binding was inserted
+	d.Update()
+	// do a lookup before the clock tells us to do monitoring
+	if e1, e2 := lookupAndVerify(d, cc, alice, key); e1 != ReqSuccess || e2 != CheckPassed {
+		t.Error(e1)
+		t.Error(e2)
+	}
+	if err := monitorAndVerify(d, cc, alice, key, cc.SavedSTR.Epoch, d.LatestSTR().Epoch); err != CheckPassed {
+		t.Error(err)
+	}
+}
+
+func TestVerifyMonitoring(t *testing.T) {
+	d, pk := NewTestDirectory(t, true)
+	cc := NewCC(d.LatestSTR(), d.LatestSTR(), true, pk)
+
+	N := 5
+
+	// verify prior history
+	for i := 0; i < N; i++ {
+		d.Update()
+	}
+	if err := monitorAndVerify(d, cc, alice, nil, cc.SavedSTR.Epoch, d.LatestSTR().Epoch); err != CheckPassed {
+		t.Error(err)
+	}
+
+	// register
+	if _, e2 := registerAndVerify(d, cc, alice, key); e2 != CheckPassed {
+		t.Error("Cannot register new binding")
+	}
+
+	// monitor binding was inserted
+	d.Update()
+	if err := monitorAndVerify(d, cc, alice, key, cc.SavedSTR.Epoch, d.LatestSTR().Epoch); err != CheckPassed {
+		t.Error(err)
+	}
+
+	// monitor
+	for i := 0; i < N; i++ {
+		d.Update()
+	}
+	if err := monitorAndVerify(d, cc, alice, key, cc.SavedSTR.Epoch, d.LatestSTR().Epoch); err != CheckPassed {
+		t.Error(err)
+	}
+
+	for i := 0; i < N; i++ {
+		d.Update()
+	}
+	if err := monitorAndVerify(d, cc, alice, key, cc.SavedSTR.Epoch, d.LatestSTR().Epoch); err != CheckPassed {
+		t.Error(err)
+	}
+}
+
+// Expect the ConsistencyChecks to panic:
+// - If: StartEpoch < SavedEpoch + 1
+func TestVerifyMonitoringBadEpoch0(t *testing.T) {
+	d, pk := NewTestDirectory(t, true)
+	cc := NewCC(d.LatestSTR(), d.LatestSTR(), true, pk)
+
+	N := 5
+
+	for i := 0; i < N; i++ {
+		d.Update()
+	}
+	if err := monitorAndVerify(d, cc, alice, nil, 0, d.LatestSTR().Epoch); err != CheckPassed {
+		t.Error("Unexpected verification result")
+	}
+
+	defer func() {
+		if recover() == nil {
+			t.Fatal("Expect HandleResponse panic")
+		}
+	}()
+	if err := monitorAndVerify(d, cc, alice, nil, cc.SavedSTR.Epoch-1, d.LatestSTR().Epoch); err != CheckPassed {
+		t.Error(err)
+	}
+}
+
+// Expect the ConsistencyChecks to panic:
+// - If: StartEpoch > SavedEpoch + 1
+func TestVerifyMonitoringBadEpoch1(t *testing.T) {
+	d, pk := NewTestDirectory(t, true)
+	cc := NewCC(d.LatestSTR(), d.LatestSTR(), true, pk)
+
+	N := 5
+
+	for i := 0; i < N; i++ {
+		d.Update()
+	}
+	if err := monitorAndVerify(d, cc, alice, nil, 0, d.LatestSTR().Epoch); err != CheckPassed {
+		t.Error("Unexpected verification result")
+	}
+
+	for i := 0; i < N; i++ {
+		d.Update()
+	}
+
+	defer func() {
+		if recover() == nil {
+			t.Fatal("Expect HandleResponse panic")
+		}
+	}()
+	if err := monitorAndVerify(d, cc, alice, nil, cc.SavedSTR.Epoch+2, d.LatestSTR().Epoch); err != CheckPassed {
+		t.Error(err)
 	}
 }

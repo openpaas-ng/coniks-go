@@ -226,7 +226,9 @@ func (msg *Response) validate() error {
 		}
 		return nil
 	case *DirectoryProofs:
-		// TODO: also do above assertions here
+		if len(df.AP) < 1 || len(df.AP) != len(df.STR) {
+			return ErrMalformedDirectoryMessage
+		}
 		return nil
 	default:
 		panic("[coniks] Malformed response")

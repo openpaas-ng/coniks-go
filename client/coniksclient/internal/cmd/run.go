@@ -39,7 +39,7 @@ func init() {
 
 func run(cmd *cobra.Command) {
 	conf := loadConfigOrExit(cmd)
-	cc := p.NewCC(nil, true, conf.SigningPubKey)
+	cc := p.NewCC(nil, nil, true, conf.SigningPubKey)
 
 	state, err := terminal.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
