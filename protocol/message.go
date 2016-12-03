@@ -226,7 +226,7 @@ func (msg *Response) validate() error {
 		}
 		return nil
 	case *DirectoryProofs:
-		if len(df.AP) < 1 || len(df.AP) != len(df.STR) {
+		if len(df.AP) == 0 || len(df.STR) == 0 {
 			return ErrMalformedDirectoryMessage
 		}
 		return nil

@@ -52,6 +52,10 @@ func NewCC(pinnedSTR, savedSTR *m.SignedTreeRoot, useTBs bool, signKey sign.Publ
 	if !useTBs {
 		panic("[coniks] Currently the server is forced to use TBs")
 	}
+	// TODO: this will break our test client
+	if pinnedSTR == nil {
+		panic("[coniks] ConsistencyChecks requires a pinned STR at epoch 0")
+	}
 	cc := &ConsistencyChecks{
 		PinnedSTR: pinnedSTR,
 		SavedSTR:  savedSTR,
@@ -81,16 +85,21 @@ func NewCC(pinnedSTR, savedSTR *m.SignedTreeRoot, useTBs bool, signKey sign.Publ
 // cryptographic proof of having been issued nonetheless.
 func (cc *ConsistencyChecks) HandleResponse(requestType int, msg *Response,
 	uname string, key []byte) ErrorCode {
-	if err := msg.validate(); err != nil {
-		return err.(ErrorCode)
+	if Errors[msg.Error] {
+		return msg.Error
 	}
 	switch requestType {
 	case RegistrationType, KeyLookupType:
-		if _, ok := msg.DirectoryResponse.(*DirectoryProof); !ok {
+		if df, ok := msg.DirectoryResponse.(*DirectoryProof); !ok ||
+			df.AP == nil || df.STR == nil {
 			return ErrMalformedDirectoryMessage
 		}
-	case MonitoringType, KeyLookupInEpochType:
-		if _, ok := msg.DirectoryResponse.(*DirectoryProofs); !ok {
+	case MonitoringType:
+		if msg.Error != ReqSuccess {
+			return ErrMalformedDirectoryMessage
+		}
+		if dfs, ok := msg.DirectoryResponse.(*DirectoryProofs); !ok ||
+			len(dfs.AP) == 0 || len(dfs.AP) != len(dfs.STR) {
 			return ErrMalformedDirectoryMessage
 		}
 	default:
@@ -149,7 +158,7 @@ func (cc *ConsistencyChecks) updateSTR(requestType int, msg *Response) error {
 				return err
 			}
 		default:
-			panic("[coniks] Passt.")
+			panic("[coniks] The next expected monitoring epochs should be read from SavedSTR.Epoch.")
 		}
 
 		for i := 1; i < len(strs); i++ {
@@ -258,19 +267,17 @@ func (cc *ConsistencyChecks) verifyKeyLookup(msg *Response,
 
 func (cc *ConsistencyChecks) verifyMonitoring(msg *Response,
 	uname string, key []byte) error {
-	if msg.Error != ReqSuccess {
-		return ErrMalformedDirectoryMessage
-	}
 	dfs := msg.DirectoryResponse.(*DirectoryProofs)
 
 	str0 := dfs.STR[0]
 	ap0 := dfs.AP[0]
 	regEp, ok := cc.RegEpoch[uname]
 
+	wasUnameAbsent := ap0.ProofType() == m.ProofOfAbsence
 	switch {
-	case !ok && str0.Epoch == 0 && ap0.ProofType() == m.ProofOfAbsence: /* prior history verification */
-	case ok && str0.Epoch == regEp && ap0.ProofType() == m.ProofOfAbsence: /* registration epoch */
-	case ok && str0.Epoch >= regEp+1 && ap0.ProofType() == m.ProofOfInclusion: /* after registration */
+	case !ok && str0.Epoch == 0 && wasUnameAbsent: /* prior history verification */
+	case ok && str0.Epoch == regEp && wasUnameAbsent: /* registration epoch */
+	case ok && str0.Epoch >= regEp+1 && !wasUnameAbsent: /* after registration */
 	default:
 		return CheckBadAuthPath
 	}

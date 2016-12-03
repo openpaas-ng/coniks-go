@@ -3,6 +3,8 @@ package protocol
 import (
 	"bytes"
 	"testing"
+
+	m "github.com/coniks-sys/coniks-go/merkletree"
 )
 
 var (
@@ -354,6 +356,61 @@ func TestVerifyMonitoringBadEpoch1(t *testing.T) {
 		}
 	}()
 	if err := monitorAndVerify(d, cc, alice, nil, cc.SavedSTR.Epoch+2, d.LatestSTR().Epoch); err != CheckPassed {
+		t.Error(err)
+	}
+}
+
+func TestMalformedMonitoringResponse(t *testing.T) {
+	d, pk := NewTestDirectory(t, true)
+	cc := NewCC(d.LatestSTR(), d.LatestSTR(), true, pk)
+
+	// len(AP) == 0
+	malformedResponse := &Response{
+		Error: ReqSuccess,
+		DirectoryResponse: &DirectoryProofs{
+			AP:  nil,
+			STR: append([]*m.SignedTreeRoot{}, &m.SignedTreeRoot{}),
+		},
+	}
+	if err := cc.HandleResponse(MonitoringType, malformedResponse, alice, key); err != ErrMalformedDirectoryMessage {
+		t.Error(err)
+	}
+
+	// len(AP) != len(STR)
+	str2 := append([]*m.SignedTreeRoot{}, &m.SignedTreeRoot{})
+	str2 = append(str2, &m.SignedTreeRoot{})
+	malformedResponse = &Response{
+		Error: ReqSuccess,
+		DirectoryResponse: &DirectoryProofs{
+			AP:  append([]*m.AuthenticationPath{}, &m.AuthenticationPath{}),
+			STR: str2,
+		},
+	}
+	if err := cc.HandleResponse(MonitoringType, malformedResponse, alice, key); err != ErrMalformedDirectoryMessage {
+		t.Error(err)
+	}
+
+	// len(STR) == 0
+	malformedResponse = &Response{
+		Error: ReqSuccess,
+		DirectoryResponse: &DirectoryProofs{
+			AP:  append([]*m.AuthenticationPath{}, &m.AuthenticationPath{}),
+			STR: nil,
+		},
+	}
+	if err := cc.HandleResponse(MonitoringType, malformedResponse, alice, key); err != ErrMalformedDirectoryMessage {
+		t.Error(err)
+	}
+
+	// Error != ReqSuccess
+	malformedResponse = &Response{
+		Error: ReqNameNotFound,
+		DirectoryResponse: &DirectoryProofs{
+			AP:  append([]*m.AuthenticationPath{}, &m.AuthenticationPath{}),
+			STR: nil,
+		},
+	}
+	if err := cc.HandleResponse(MonitoringType, malformedResponse, alice, key); err != ErrMalformedDirectoryMessage {
 		t.Error(err)
 	}
 }
