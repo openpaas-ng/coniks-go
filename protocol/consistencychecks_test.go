@@ -275,13 +275,17 @@ func TestVerifyMonitoring(t *testing.T) {
 	for i := 0; i < N; i++ {
 		d.Update()
 	}
-	if err := monitorAndVerify(d, cc, alice, nil, cc.SavedSTR.Epoch, d.LatestSTR().Epoch); err != CheckPassed {
+	if err := monitorAndVerify(d, cc, alice, nil, 0, d.LatestSTR().Epoch); err != CheckPassed {
 		t.Error(err)
 	}
 
 	// register
 	if _, e2 := registerAndVerify(d, cc, alice, key); e2 != CheckPassed {
 		t.Error("Cannot register new binding")
+	}
+	// or we can verify prior history after registering
+	if err := monitorAndVerify(d, cc, alice, nil, 0, d.LatestSTR().Epoch); err != CheckPassed {
+		t.Error(err)
 	}
 
 	// monitor binding was inserted

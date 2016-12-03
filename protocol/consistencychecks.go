@@ -275,7 +275,7 @@ func (cc *ConsistencyChecks) verifyMonitoring(msg *Response,
 
 	wasUnameAbsent := ap0.ProofType() == m.ProofOfAbsence
 	switch {
-	case !ok && str0.Epoch == 0 && wasUnameAbsent: /* prior history verification */
+	case str0.Epoch == 0 && wasUnameAbsent: /* prior history verification */
 	case ok && str0.Epoch == regEp && wasUnameAbsent: /* registration epoch */
 	case ok && str0.Epoch >= regEp+1 && !wasUnameAbsent: /* after registration */
 	default:
