@@ -25,8 +25,6 @@ import (
 // subsequent responses from the ConiksDirectory to any
 // client request.
 type ConsistencyChecks struct {
-	// PinnedSTR stores the pinned signed tree root at epoch 0. This is hardcoded into the client.
-	PinnedSTR *m.SignedTreeRoot
 	// SavedSTR stores the latest verified signed tree root.
 	SavedSTR *m.SignedTreeRoot
 	// Bindings stores all the verified name-to-key bindings.
@@ -47,22 +45,17 @@ type ConsistencyChecks struct {
 // TODO: maybe remove savedSTR from the parameters
 // and have something like RestoreState(savedSTR, bindings, regepoch) instead.
 // Possibly it somehow relate to #137 (client storage).
-func NewCC(pinnedSTR, savedSTR *m.SignedTreeRoot, useTBs bool, signKey sign.PublicKey) *ConsistencyChecks {
+func NewCC(savedSTR *m.SignedTreeRoot, useTBs bool, signKey sign.PublicKey) *ConsistencyChecks {
 	// TODO: see #110
 	if !useTBs {
 		panic("[coniks] Currently the server is forced to use TBs")
 	}
-	// TODO: this will break our test client
-	if pinnedSTR == nil {
-		panic("[coniks] ConsistencyChecks requires a pinned STR at epoch 0")
-	}
 	cc := &ConsistencyChecks{
-		PinnedSTR: pinnedSTR,
-		SavedSTR:  savedSTR,
-		Bindings:  make(map[string][]byte),
-		RegEpoch:  make(map[string]uint64),
-		useTBs:    useTBs,
-		signKey:   signKey,
+		SavedSTR: savedSTR,
+		Bindings: make(map[string][]byte),
+		RegEpoch: make(map[string]uint64),
+		useTBs:   useTBs,
+		signKey:  signKey,
 	}
 	if useTBs {
 		cc.TBs = make(map[string]*TemporaryBinding)
@@ -141,14 +134,15 @@ func (cc *ConsistencyChecks) updateSTR(requestType int, msg *Response) error {
 		}
 
 	case MonitoringType:
-		// the requested epoch can be equal to saved epoch or the next expected epoch
-		// or epoch 0.
+		// the requested epoch can be equal to/or less than
+		// the saved epoch or the next expected epoch
 		strs := msg.DirectoryResponse.(*DirectoryProofs).STR
 		switch {
-		case strs[0].Epoch == 0: /* prior history verification */
-			if err := verifySTR(cc.PinnedSTR, strs[0]); err != nil {
-				return err
-			}
+		case strs[0].Epoch < cc.SavedSTR.Epoch: /* prior history verification */
+		// FIXME: TOFU until we introduce auditor modules?
+		// if err := verifySTR(???, strs[0]); err != nil {
+		// return err
+		// }
 		case strs[0].Epoch == cc.SavedSTR.Epoch:
 			if err := verifySTR(cc.SavedSTR, strs[0]); err != nil {
 				return err
@@ -158,7 +152,7 @@ func (cc *ConsistencyChecks) updateSTR(requestType int, msg *Response) error {
 				return err
 			}
 		default:
-			panic("[coniks] The next expected monitoring epochs should be read from SavedSTR.Epoch.")
+			panic("[coniks] The monitoring epochs cannot be greater than current the saved epoch")
 		}
 
 		for i := 1; i < len(strs); i++ {
@@ -166,7 +160,10 @@ func (cc *ConsistencyChecks) updateSTR(requestType int, msg *Response) error {
 				return err
 			}
 		}
-		str = strs[len(strs)-1]
+		str = cc.SavedSTR
+		if strs[len(strs)-1].Epoch > str.Epoch {
+			str = strs[len(strs)-1]
+		}
 
 	default:
 		panic("[coniks] Unknown request type")
@@ -273,9 +270,11 @@ func (cc *ConsistencyChecks) verifyMonitoring(msg *Response,
 	ap0 := dfs.AP[0]
 	regEp, ok := cc.RegEpoch[uname]
 
+	// TODO: is this actually faster?
 	wasUnameAbsent := ap0.ProofType() == m.ProofOfAbsence
 	switch {
-	case str0.Epoch == 0 && wasUnameAbsent: /* prior history verification */
+	case !ok && str0.Epoch < cc.SavedSTR.Epoch && wasUnameAbsent: /* prior history verification */
+	case ok && str0.Epoch < regEp && wasUnameAbsent: /* prior history verification */
 	case ok && str0.Epoch == regEp && wasUnameAbsent: /* registration epoch */
 	case ok && str0.Epoch >= regEp+1 && !wasUnameAbsent: /* after registration */
 	default:
@@ -289,8 +288,9 @@ func (cc *ConsistencyChecks) verifyMonitoring(msg *Response,
 		str := dfs.STR[i]
 		ap := dfs.AP[i]
 		switch {
-		case str0.Epoch == 0 && ap.ProofType() == m.ProofOfAbsence: /* prior history verification */
-		case str0.Epoch > 0 && ap.ProofType() == m.ProofOfInclusion:
+		case !ok && ap.ProofType() == m.ProofOfAbsence:
+		case str0.Epoch <= cc.SavedSTR.Epoch && ap.ProofType() == m.ProofOfAbsence: /* prior history verification */
+		case str0.Epoch > cc.SavedSTR.Epoch && ap.ProofType() == m.ProofOfInclusion:
 		default:
 			return CheckBadAuthPath
 		}
