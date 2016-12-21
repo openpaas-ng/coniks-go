@@ -14,6 +14,8 @@ import (
 	"github.com/coniks-sys/coniks-go/crypto/sign"
 	"github.com/coniks-sys/coniks-go/crypto/vrf"
 	"github.com/coniks-sys/coniks-go/merkletree"
+	"github.com/coniks-sys/coniks-go/protocol/extensions/extension"
+	"github.com/coniks-sys/coniks-go/protocol/extensions/storage/kvstorage"
 )
 
 // A ConiksDirectory maintains the underlying persistent
@@ -28,6 +30,7 @@ type ConiksDirectory struct {
 	useTBs   bool
 	tbs      map[string]*TemporaryBinding
 	policies *Policies
+	db       extension.SnapshotStorage
 }
 
 // NewDirectory constructs a new ConiksDirectory given the key server's PAD
@@ -59,6 +62,10 @@ func NewDirectory(epDeadline Timestamp, vrfKey vrf.PrivateKey,
 	if useTBs {
 		d.tbs = make(map[string]*TemporaryBinding)
 	}
+	d.db, err = extension.NewSnapshotStorage(kvstorage.SnapshotKVID, ".")
+	if err != nil {
+		panic(err)
+	}
 	return d
 }
 
@@ -72,6 +79,7 @@ func (d *ConiksDirectory) Update() {
 	for key := range d.tbs {
 		delete(d.tbs, key)
 	}
+	d.db.StoreDirectory()
 }
 
 // SetPolicies sets this ConiksDirectory's epoch deadline, which will be used
