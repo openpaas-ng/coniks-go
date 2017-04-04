@@ -11,6 +11,9 @@ import (
 
 	"github.com/coniks-sys/coniks-go/crypto/sign"
 	m "github.com/coniks-sys/coniks-go/merkletree"
+	"log"
+	"github.com/coniks-sys/coniks-go/crypto"
+	"encoding/hex"
 )
 
 // ConsistencyChecks stores the latest consistency check
@@ -105,6 +108,10 @@ func (cc *ConsistencyChecks) updateSTR(requestType int, msg *Response) error {
 	switch requestType {
 	case RegistrationType, KeyLookupType:
 		str = msg.DirectoryResponse.(*DirectoryProof).STR
+
+		digest := hex.EncodeToString(crypto.Digest(str.Signature))				
+		log.Printf("[debug] receive STR, Epoch %d, signature: 0x%s", str.Epoch, digest)
+
 		// First response
 		if cc.SavedSTR == nil {
 			cc.SavedSTR = str
@@ -119,7 +126,7 @@ func (cc *ConsistencyChecks) updateSTR(requestType int, msg *Response) error {
 		// Otherwise, expect that we've entered a new epoch
 		if err := cc.verifySTRConsistency(cc.SavedSTR, str); err != nil {
 			return err
-		}
+		}		
 
 	default:
 		panic("[coniks] Unknown request type")
