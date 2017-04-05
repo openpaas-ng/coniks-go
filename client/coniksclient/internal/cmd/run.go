@@ -11,8 +11,8 @@ import (
 	"github.com/coniks-sys/coniks-go/keyserver/testutil"
 	p "github.com/coniks-sys/coniks-go/protocol"
 	"github.com/spf13/cobra"
-	"golang.org/x/crypto/ssh/terminal"
-	"github.com/coniks-sys/coniks-go/eth/utils"
+	"golang.org/x/crypto/ssh/terminal"	
+	"github.com/coniks-sys/coniks-go/eth"
 )
 
 const help = "- register [name] [key]:\r\n" +
@@ -109,7 +109,8 @@ func run(cmd *cobra.Command) {
 				writeLineInRawMode(term, "[!] Incorrect number of args to lookup.", isDebugging)
 				continue
 			}
-			msg := audit(args[1])
+			epoch, _ := strconv.ParseUint(args[1],10,64)
+			msg := eth.AuditSTR(epoch)
 			writeLineInRawMode(term, "[+] Query epoch " + args[1] + ". STR: "+msg, isDebugging)			
 		default:
 			writeLineInRawMode(term, "[!] Unrecognized command: "+cmd, isDebugging)
@@ -117,14 +118,6 @@ func run(cmd *cobra.Command) {
 	}
 }
 
-func audit(epoch string) string {
-	utils.RPCEndpointURL = "http://localhost:8545"
-	utils.BaseAddress = "0x2589a613B33D98cC1f9b0874dB59fc315174DF58"
-	utils.ContractAddress = "0x652f54e04b5961D983e88b36904F003A97A707A4"
-	epochNum, _ := strconv.ParseUint(epoch,10,64)
-	res := utils.GetSTR("1", epochNum, utils.BaseAddress)
-	return res
-}
 func register(cc *p.ConsistencyChecks, conf *client.Config, name string, key string) string {
 	req, err := client.CreateRegistrationMsg(name, []byte(key))
 	if err != nil {

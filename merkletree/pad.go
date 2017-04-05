@@ -4,13 +4,9 @@ import (
 	"bytes"
 	"errors"
 
-	"encoding/hex"
-	"log"
-
 	"github.com/coniks-sys/coniks-go/crypto"
 	"github.com/coniks-sys/coniks-go/crypto/sign"
 	"github.com/coniks-sys/coniks-go/crypto/vrf"
-	"github.com/coniks-sys/coniks-go/eth/utils"
 )
 
 var (
@@ -79,19 +75,6 @@ func (pad *PAD) updateInternal(ad AssocData, epoch uint64) {
 	// operation.
 	pad.signTreeRoot(epoch)
 	pad.snapshots[epoch] = pad.latestSTR
-	digest := crypto.Digest(pad.latestSTR.Signature)
-	
-	log.Printf("[debug] Update Epoch %d, STR: %s \n", epoch, hex.EncodeToString(digest))
-
-	//Publish the new STR to Ethereum
-	utils.RPCEndpointURL = "http://localhost:8545"
-	utils.BaseAddress = "0x2589a613B33D98cC1f9b0874dB59fc315174DF58"
-	utils.ContractAddress = "0x652f54e04b5961D983e88b36904F003A97A707A4"
-
-	res := utils.Publish("1", epoch, digest)
-
-	log.Println("[debug] Published to Ethereum transaction: ", res)	
-	
 	pad.loadedEpochs = append(pad.loadedEpochs, epoch)
 	if ad != nil { // update the `ad` if necessary
 		pad.ad = ad

@@ -8,14 +8,13 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/coniks-sys/coniks-go/crypto/sign"
 	"github.com/coniks-sys/coniks-go/crypto/vrf"
+	"github.com/coniks-sys/coniks-go/eth"
 	"github.com/coniks-sys/coniks-go/protocol"
 	"github.com/coniks-sys/coniks-go/utils"
 )
@@ -93,6 +92,9 @@ type ConiksServer struct {
 	epochTimer     *time.Timer
 }
 
+// EnableEthereumAudit determines if Ethereum auditing is enabled.
+var EnableEthereumAudit = false
+
 // LoadServerConfig loads the ServerConfig for the server from the
 // corresponding config file. It reads the siging key pair and the VRF key
 // pair into the ServerConfig instance and updates the path of
@@ -147,8 +149,8 @@ func NewConiksServer(conf *ServerConfig) *ConiksServer {
 		true)
 	server.stop = make(chan struct{})
 	server.configFilePath = conf.configFilePath
-	server.reloadChan = make(chan os.Signal, 1)
-	signal.Notify(server.reloadChan, syscall.SIGUSR2)
+	//server.reloadChan = make(chan os.Signal, 1)
+	//signal.Notify(server.reloadChan, syscall.SIGUSR2)
 	server.epochTimer = time.NewTimer(time.Duration(conf.Policies.EpochDeadline) * time.Second)
 
 	return server
@@ -202,6 +204,10 @@ func (server *ConiksServer) epochUpdate() {
 		case <-server.epochTimer.C:
 			server.Lock()
 			server.dir.Update()
+			//Send the STR to Ethereum
+			if (EnableEthereumAudit) {
+				eth.PublishSTR(server.dir.LatestSTR())
+			}
 			server.epochTimer.Reset(time.Duration(server.dir.EpochDeadline()) * time.Second)
 			server.Unlock()
 		}

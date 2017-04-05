@@ -24,11 +24,12 @@ in the current directory if not specified differently.
 	Run: func(cmd *cobra.Command, args []string) {
 		config := cmd.Flag("config").Value.String()
 		pid, _ := strconv.ParseBool(cmd.Flag("pid").Value.String())
+		eth, _ := strconv.ParseBool(cmd.Flag("eth").Value.String())
 		// ignore the error here since it is handled by the flag parser.
 		if pid {
 			writePID()
-		}
-		run(config)
+		}		
+		run(config, eth)
 	},
 }
 
@@ -36,15 +37,16 @@ func init() {
 	RootCmd.AddCommand(runCmd)
 	runCmd.Flags().StringP("config", "c", "config.toml", "Path to server configuration file")
 	runCmd.Flags().BoolP("pid", "p", false, "Write down the process id to coniks.pid in the current working directory")
+	runCmd.Flags().BoolP("eth", "e", false, "Enable auditing with Ethereum")
 }
 
-func run(confPath string) {
-	conf, err := keyserver.LoadServerConfig(confPath)
+func run(confPath string, ethEnabled bool) {
+	conf, err := keyserver.LoadServerConfig(confPath)	
 	if err != nil {
 		log.Fatal(err)
-	}
-	serv := keyserver.NewConiksServer(conf)
-
+	}		
+	serv := keyserver.NewConiksServer(conf)	
+	
 	// run the server until receiving an interrupt signal
 	serv.Run(conf.Addresses)
 	ch := make(chan os.Signal, 1)
