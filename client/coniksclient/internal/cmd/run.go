@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	"github.com/coniks-sys/coniks-go/client"
+	"github.com/coniks-sys/coniks-go/eth"
 	"github.com/coniks-sys/coniks-go/keyserver/testutil"
 	p "github.com/coniks-sys/coniks-go/protocol"
 	"github.com/spf13/cobra"
-	"golang.org/x/crypto/ssh/terminal"	
-	"github.com/coniks-sys/coniks-go/eth"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 const help = "- register [name] [key]:\r\n" +
@@ -95,33 +95,33 @@ func run(cmd *cobra.Command) {
 				writeLineInRawMode(term, "[!] Incorrect number of args to register.", isDebugging)
 				continue
 			}
-			msg := register(cc, conf, args[1], args[2])
+			msg, _ := register(cc, conf, args[1], args[2])
 			writeLineInRawMode(term, "[+] "+msg, isDebugging)
 		case "lookup":
 			if len(args) != 2 {
 				writeLineInRawMode(term, "[!] Incorrect number of args to lookup.", isDebugging)
 				continue
 			}
-			msg := keyLookup(cc, conf, args[1])
+			msg, _ := keyLookup(cc, conf, args[1])
 			writeLineInRawMode(term, "[+] "+msg, isDebugging)
 		case "audit":
 			if len(args) != 2 {
 				writeLineInRawMode(term, "[!] Incorrect number of args to lookup.", isDebugging)
 				continue
 			}
-			epoch, _ := strconv.ParseUint(args[1],10,64)
+			epoch, _ := strconv.ParseUint(args[1], 10, 64)
 			msg := eth.AuditSTR(epoch)
-			writeLineInRawMode(term, "[+] Query epoch " + args[1] + ". STR: "+msg, isDebugging)			
+			writeLineInRawMode(term, "[+] Query epoch "+args[1]+". STR: "+msg, isDebugging)
 		default:
 			writeLineInRawMode(term, "[!] Unrecognized command: "+cmd, isDebugging)
 		}
 	}
 }
 
-func register(cc *p.ConsistencyChecks, conf *client.Config, name string, key string) string {
+func register(cc *p.ConsistencyChecks, conf *client.Config, name string, key string) (string, p.ErrorCode) {
 	req, err := client.CreateRegistrationMsg(name, []byte(key))
 	if err != nil {
-		return ("Couldn't marshal registration request!")
+		return ("Couldn't marshal registration request!"), 500
 	}
 
 	var res []byte
@@ -135,15 +135,15 @@ func register(cc *p.ConsistencyChecks, conf *client.Config, name string, key str
 	case "tcp":
 		res, err = testutil.NewTCPClient(req, regAddress)
 		if err != nil {
-			return ("Error while receiving response: " + err.Error())
+			return ("Error while receiving response: " + err.Error()), 500
 		}
 	case "unix":
 		res, err = testutil.NewUnixClient(req, regAddress)
 		if err != nil {
-			return ("Error while receiving response: " + err.Error())
+			return ("Error while receiving response: " + err.Error()), 500
 		}
 	default:
-		return ("Invalid config!")
+		return ("Invalid config!"), 500
 	}
 
 	response := client.UnmarshalResponse(p.RegistrationType, res)
@@ -151,35 +151,35 @@ func register(cc *p.ConsistencyChecks, conf *client.Config, name string, key str
 	switch err {
 	case p.CheckBadSTR:
 		// FIXME: remove me
-		return ("Error: " + err.Error() + ". Maybe the client missed an epoch in between two commands, monitoring isn't supported yet.")
+		return ("Error: " + err.Error() + ". Maybe the client missed an epoch in between two commands, monitoring isn't supported yet."), p.CheckBadSTR
 	case p.CheckPassed:
 		switch response.Error {
 		case p.ReqSuccess:
-			return ("Succesfully registered name: " + name)
+			return ("Succesfully registered name: " + name), p.ReqSuccess
 		case p.ReqNameExisted:
-			return ("Name is already registered.")
+			return ("Name is already registered."), p.ReqNameExisted
 		}
 	case p.CheckBindingsDiffer:
 		switch response.Error {
 		case p.ReqNameExisted:
-			return (`Are you trying to update your binding? Unfortunately, KeyChange isn't supported yet.`)
+			return (`Are you trying to update your binding? Unfortunately, KeyChange isn't supported yet.`), p.ReqNameExisted
 		case p.ReqSuccess:
 			recvKey, err := response.GetKey()
 			if err != nil {
-				return ("Oops! The server snuck in some other key. However, I cannot get the key from the response, error: " + err.Error())
+				return ("Oops! The server snuck in some other key. However, I cannot get the key from the response, error: " + err.Error()), 500
 			}
-			return ("Oops! The server snuck in some other key. [" + string(recvKey) + "] was registered instead of [" + string(key) + "]")
+			return ("Oops! The server snuck in some other key. [" + string(recvKey) + "] was registered instead of [" + string(key) + "]"), p.ReqSuccess
 		}
 	default:
-		return ("Error: " + err.Error())
+		return ("Error: " + err.Error()), 500
 	}
-	return ""
+	return "", 500
 }
 
-func keyLookup(cc *p.ConsistencyChecks, conf *client.Config, name string) string {
+func keyLookup(cc *p.ConsistencyChecks, conf *client.Config, name string) (string, p.ErrorCode) {
 	req, err := client.CreateKeyLookupMsg(name)
 	if err != nil {
-		return ("Couldn't marshal key lookup request!")
+		return ("Couldn't marshal key lookup request!"), 500
 	}
 
 	var res []byte
@@ -188,15 +188,15 @@ func keyLookup(cc *p.ConsistencyChecks, conf *client.Config, name string) string
 	case "tcp":
 		res, err = testutil.NewTCPClient(req, conf.Address)
 		if err != nil {
-			return ("Error while receiving response: " + err.Error())
+			return ("Error while receiving response: " + err.Error()), 500
 		}
 	case "unix":
 		res, err = testutil.NewUnixClient(req, conf.Address)
 		if err != nil {
-			return ("Error while receiving response: " + err.Error())
+			return ("Error while receiving response: " + err.Error()), 500
 		}
 	default:
-		return ("Invalid config!")
+		return ("Invalid config!"), 500
 	}
 
 	response := client.UnmarshalResponse(p.KeyLookupType, res)
@@ -208,20 +208,20 @@ func keyLookup(cc *p.ConsistencyChecks, conf *client.Config, name string) string
 	switch err {
 	case p.CheckBadSTR:
 		// FIXME: remove me
-		return ("Error: " + err.Error() + ". Maybe the client missed an epoch in between two commands, monitoring isn't supported yet.")
+		return ("Error: " + err.Error() + ". Maybe the client missed an epoch in between two commands, monitoring isn't supported yet."), p.CheckBadSTR
 	case p.CheckPassed:
 		switch response.Error {
 		case p.ReqSuccess:
 			key, err := response.GetKey()
 			if err != nil {
-				return ("Cannot get the key from the response, error: " + err.Error())
+				return ("Cannot get the key from the response, error: " + err.Error()), 500
 			}
-			return ("Found! Key bound to name is: [" + string(key) + "]")
+			return ("Found! Key bound to name is: [" + string(key) + "]"), p.ReqSuccess
 		case p.ReqNameNotFound:
-			return ("Name isn't registered.")
+			return ("Name isn't registered."), p.ReqNameNotFound
 		}
 	default:
-		return ("Error: " + err.Error())
+		return ("Error: " + err.Error()), 500
 	}
-	return ""
+	return "", 500
 }
