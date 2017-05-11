@@ -12,19 +12,19 @@ import (
 )
 
 //GetCoinBaseAddress comment
-func GetCoinBaseAddress(id string) string {
+func (trusternityObject *Trusternity) getCoinBaseAddress(id string) string {
 	request := transactionRPCRequest{
 		Jsonrpc: "2.0",
 		Method:  "eth_coinbase",
 		ID:      id,
 	}
 	req, _ := json.Marshal(request)
-	resp := CreatePostRequest(Config.EndpointURL, req)
+	resp := CreatePostRequest(trusternityObject.config.EndpointURL, req)
 	return resp
 }
 
 //Register function comment
-func register(id, ipName string, fingerprint []byte) string {
+func (trusternityObject *Trusternity) register(id, ipName string, fingerprint []byte) string {
 	// declare the main buffer
 	var buffer bytes.Buffer
 	// Init the buffer with method ID
@@ -51,14 +51,14 @@ func register(id, ipName string, fingerprint []byte) string {
 	buffer.Write(common.RightPadBytes(fingerprint, 32))
 
 	//make POST request
-	request := makeEthSendRequest(buffer.Bytes())
-	resp := CreatePostRequest(Config.EndpointURL, request)
+	request := makeEthSendRequest(trusternityObject.config, buffer.Bytes())
+	resp := CreatePostRequest(trusternityObject.config.EndpointURL, request)
 
 	return resp
 }
 
 //Publish function comment
-func publish(id string, epoch uint64, STR []byte) string {
+func (trusternityObject *Trusternity) publish(id string, epoch uint64, STR []byte) string {
 	// declare the main buffer
 	var buffer bytes.Buffer
 	// Init the buffer with method ID
@@ -80,8 +80,8 @@ func publish(id string, epoch uint64, STR []byte) string {
 	gas := "0x" + fmt.Sprintf("%x", 900000)
 
 	transObject := transaction{
-		From: Config.AccountAddress,
-		To:   Config.TrusternityContractAddress,
+		From: trusternityObject.config.AccountAddress,
+		To:   trusternityObject.config.TrusternityContractAddress,
 		Data: transData,
 		Gas:  gas,
 	}
@@ -94,12 +94,12 @@ func publish(id string, epoch uint64, STR []byte) string {
 	}
 	req, _ := json.Marshal(request)
 
-	resp := CreatePostRequest(Config.EndpointURL, req)
+	resp := CreatePostRequest(trusternityObject.config.EndpointURL, req)
 	return resp
 }
 
 //GetIPName comment
-func GetIPName(id, address string) string {
+func (trusternityObject *Trusternity) GetIPName(id, address string) string {
 	// declare the main buffer
 	var buffer bytes.Buffer
 	// Init the buffer with method ID
@@ -110,8 +110,8 @@ func GetIPName(id, address string) string {
 	buffer.Write(common.LeftPadBytes(aBytes, 32))
 
 	//make POST request
-	request := makeEthCallRequest(buffer.Bytes())
-	resp := CreatePostRequest(Config.EndpointURL, request)
+	request := makeEthCallRequest(trusternityObject.config, buffer.Bytes())
+	resp := CreatePostRequest(trusternityObject.config.EndpointURL, request)
 
 	//parse the reply
 	resp = strings.Replace(resp, "0x", "", 1)
@@ -122,7 +122,7 @@ func GetIPName(id, address string) string {
 }
 
 // GetSTR comment
-func GetSTR(id string, epoch uint64, address string) string {
+func (trusternityObject *Trusternity) GetSTR(id string, epoch uint64, address string) string {
 	// declare the main buffer
 	var buffer bytes.Buffer
 	// Init the buffer with method ID
@@ -136,7 +136,7 @@ func GetSTR(id string, epoch uint64, address string) string {
 	binary.BigEndian.PutUint64(epochBytes, epoch)
 	buffer.Write(common.LeftPadBytes(epochBytes, 32))
 
-	request := makeEthCallRequest(buffer.Bytes())
-	resp := CreatePostRequest(Config.EndpointURL, request)
+	request := makeEthCallRequest(trusternityObject.config, buffer.Bytes())
+	resp := CreatePostRequest(trusternityObject.config.EndpointURL, request)
 	return resp
 }
