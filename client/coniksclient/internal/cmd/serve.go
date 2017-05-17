@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"log"
@@ -23,6 +25,8 @@ var ServerCmd = &cobra.Command{
 	},
 }
 
+var allowedOrigins = []string{"127.0.0.1", "localhost"}
+
 func init() {
 	RootCmd.AddCommand(ServerCmd)
 	ServerCmd.Flags().StringP("config", "c", "config.toml",
@@ -37,8 +41,16 @@ func startLocalHTTPServer(cmd *cobra.Command) {
 
 func makeHandler(cmd *cobra.Command) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if isOriginAllowed(r.Header.Get("Origin")) {
+			log.Printf("Origin %s allowed\n", r.Header.Get("Origin"))
+			w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+		}
 		body, _ := ioutil.ReadAll(r.Body)
 		bodyStr := string(body)
+		b, err := json.MarshalIndent(r.Header, "", "  ")
+		if err != nil {
+			log.Println("error:", err)
+		}
 		log.Printf("Received request : %s\n", bodyStr)
 		conf := loadConfigOrExit(cmd)
 		cc := p.NewCC(nil, true, conf.SigningPubKey)
@@ -101,4 +113,11 @@ func errorCodeToHTTPError(errCode p.ErrorCode) int {
 		httpError = http.StatusInternalServerError
 	}
 	return httpError
+}
+
+func isOriginAllowed(origin string) bool {
+	allowedOriginsJoined := strings.Join(allowedOrigins, "|")
+	var pattern = regexp.MustCompile(fmt.Sprintf(`(https?:\/\/)(%s)(:)([0-9]+)`, allowedOriginsJoined))
+
+	return pattern.MatchString(origin)
 }
