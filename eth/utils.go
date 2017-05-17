@@ -12,9 +12,9 @@ import (
 
 //CreatePostRequest create a http POST request to a host with a command body.
 func CreatePostRequest(url string, command []byte) string {
-	resp, err := http.Post(url, "application/json; charset=utf-8", bytes.NewBuffer(command))
+	resp, err := http.Post("http://" + url, "application/json; charset=utf-8", bytes.NewBuffer(command))
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())		
 	}
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
@@ -30,7 +30,7 @@ func getMethodID(methodSignature string) []byte {
 	return slice
 }
 
-func makeEthSendRequest(data []byte) []byte {
+func makeEthSendRequest(config *EtherConfig, data []byte) []byte {
 	//Put all data in hex
 	transData := "0x" + hex.EncodeToString(data)
 
@@ -38,8 +38,8 @@ func makeEthSendRequest(data []byte) []byte {
 	gas := "0x" + fmt.Sprintf("%x", 900000)
 
 	transObject := transaction{
-		From: Config.AccountAddress,
-		To:   Config.TrusternityContractAddress,
+		From: config.AccountAddress,
+		To:   config.TrusternityContractAddress,
 		Data: transData,
 		Gas:  gas,
 	}
@@ -54,11 +54,11 @@ func makeEthSendRequest(data []byte) []byte {
 	return req
 }
 
-func makeEthCallRequest(data []byte) []byte {
+func makeEthCallRequest(config *EtherConfig, data []byte) []byte {
 	transData := "0x" + hex.EncodeToString(data)
 	transObject := transaction{
-		From: Config.AccountAddress,
-		To:   Config.TrusternityContractAddress,
+		From: config.AccountAddress,
+		To:   config.TrusternityContractAddress,
 		Data: transData,
 	}
 

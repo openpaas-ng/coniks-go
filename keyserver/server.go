@@ -90,10 +90,9 @@ type ConiksServer struct {
 	configFilePath string
 	reloadChan     chan os.Signal
 	epochTimer     *time.Timer
+	ethAudit       bool //determines if Ethereum auditing is enabled.
+	trusternity    *eth.Trusternity
 }
-
-// EnableEthereumAudit determines if Ethereum auditing is enabled.
-var EnableEthereumAudit = false
 
 // LoadServerConfig loads the ServerConfig for the server from the
 // corresponding config file. It reads the siging key pair and the VRF key
@@ -149,11 +148,19 @@ func NewConiksServer(conf *ServerConfig) *ConiksServer {
 		true)
 	server.stop = make(chan struct{})
 	server.configFilePath = conf.configFilePath
+	server.ethAudit = false
 	//server.reloadChan = make(chan os.Signal, 1)
 	//signal.Notify(server.reloadChan, syscall.SIGUSR2)
 	server.epochTimer = time.NewTimer(time.Duration(conf.Policies.EpochDeadline) * time.Second)
 
 	return server
+}
+
+// EnableTrusternityAudit enable Ethereum audit for
+// a CONIKS key server
+func (server *ConiksServer) EnableTrusternityAudit(ethConfigFile string) {
+	server.ethAudit = true
+	server.trusternity = eth.NewTrusternityObject(ethConfigFile)
 }
 
 // Run implements the main functionality of the key server.
@@ -205,8 +212,8 @@ func (server *ConiksServer) epochUpdate() {
 			server.Lock()
 			server.dir.Update()
 			//Send the STR to Ethereum
-			if (EnableEthereumAudit) {
-				eth.PublishSTR(server.dir.LatestSTR())
+			if server.ethAudit {
+				server.trusternity.PublishSTR(server.dir.LatestSTR())
 			}
 			server.epochTimer.Reset(time.Duration(server.dir.EpochDeadline()) * time.Second)
 			server.Unlock()
