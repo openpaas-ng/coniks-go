@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -47,16 +46,12 @@ func makeHandler(cmd *cobra.Command) func(w http.ResponseWriter, r *http.Request
 		}
 		body, _ := ioutil.ReadAll(r.Body)
 		bodyStr := string(body)
-		b, err := json.MarshalIndent(r.Header, "", "  ")
-		if err != nil {
-			log.Println("error:", err)
-		}
 		log.Printf("Received request : %s\n", bodyStr)
 		conf := loadConfigOrExit(cmd)
 		cc := p.NewCC(nil, true, conf.SigningPubKey)
 		args := strings.Fields(bodyStr)
 		if len(args) < 1 {
-			msg := "[!] Usage :\n\nregister <name> <key>\nor\nlookup <name>\n"
+			msg := "[!] Usage :\n\nregister <name> <key>\nor\nlookup <name>"
 			log.Print(msg)
 			http.Error(w, fmt.Sprint(msg), http.StatusBadRequest)
 			return
@@ -65,29 +60,29 @@ func makeHandler(cmd *cobra.Command) func(w http.ResponseWriter, r *http.Request
 		switch cmd {
 		case "register":
 			if len(args) != 3 {
-				msg := "[!] Incorrect number of args to register.\nUsage : register <name> <key>\n"
+				msg := "[!] Incorrect number of args to register.\nUsage : register <name> <key>"
 				log.Printf(msg)
 				http.Error(w, fmt.Sprint(msg), http.StatusBadRequest)
 				return
 			}
 			msg, errCode := register(cc, conf, args[1], args[2])
 			httpErrorCode := errorCodeToHTTPError(errCode)
-			log.Printf("[+] Error code : %d, HTTP error code : %d, %s\n", errCode, httpErrorCode, msg)
-			http.Error(w, fmt.Sprintf("[+] %s\n", msg), httpErrorCode)
+			log.Printf("[+] Error code : %d, HTTP error code : %d, %s", errCode, httpErrorCode, msg)
+			http.Error(w, fmt.Sprintf("[+] %s", msg), httpErrorCode)
 		case "lookup":
 			if len(args) != 2 {
-				msg := "[!] Incorrect number of args to lookup.\nUsage : lookup <name>\n"
+				msg := "[!] Incorrect number of args to lookup.\nUsage : lookup <name>"
 				log.Printf(msg)
 				http.Error(w, fmt.Sprint(msg), http.StatusBadRequest)
 				return
 			}
 			msg, errCode := keyLookup(cc, conf, args[1])
 			httpErrorCode := errorCodeToHTTPError(errCode)
-			log.Printf("[+] Error code : %d, HTTP error code : %d, %s\n", errCode, httpErrorCode, msg)
+			log.Printf("[+] Error code : %d, HTTP error code : %d, %s", errCode, httpErrorCode, msg)
 			http.Error(w, fmt.Sprintf("[+] %s\n", msg), httpErrorCode)
 		default:
-			log.Printf("[!] Unrecognized command: %s\n", cmd)
-			http.Error(w, fmt.Sprintf("[!] Unrecognized command: %s\n", cmd), http.StatusBadRequest)
+			log.Printf("[!] Unrecognized command: %s", cmd)
+			http.Error(w, fmt.Sprintf("[!] Unrecognized command: %s", cmd), http.StatusBadRequest)
 		}
 	}
 }
