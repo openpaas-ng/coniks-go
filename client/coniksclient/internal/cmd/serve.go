@@ -79,7 +79,7 @@ func makeHandler(cmd *cobra.Command) func(w http.ResponseWriter, r *http.Request
 			msg, errCode := keyLookup(cc, conf, args[1])
 			httpErrorCode := errorCodeToHTTPError(errCode)
 			log.Printf("[+] Error code : %d, HTTP error code : %d, %s", errCode, httpErrorCode, msg)
-			http.Error(w, fmt.Sprintf("[+] %s\n", msg), httpErrorCode)
+			http.Error(w, fmt.Sprintf("[+] %s", msg), httpErrorCode)
 		default:
 			log.Printf("[!] Unrecognized command: %s", cmd)
 			http.Error(w, fmt.Sprintf("[!] Unrecognized command: %s", cmd), http.StatusBadRequest)
