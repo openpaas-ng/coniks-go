@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/url"
 	"os"
@@ -118,10 +120,34 @@ func run(cmd *cobra.Command) {
 	}
 }
 
+func createAuthRegistrationMsg(username string, accessToken string) ([]byte, error) {
+	type Auth struct {
+		Username    string
+		AccessToken string
+	}
+	req := &Auth{Username: username, AccessToken: accessToken}
+	return json.Marshal(req)
+}
+
 func register(cc *p.ConsistencyChecks, conf *client.Config, name string, key string) (string, p.ErrorCode) {
-	req, err := client.CreateRegistrationMsg(name, []byte(key))
+	var req []byte
+	nameAccesstoken := strings.Split(name, " ")
+	var accessToken string
+	if len(nameAccesstoken) == 2 {
+		name = nameAccesstoken[0]
+		accessToken = nameAccesstoken[1]
+		req, _ = createAuthRegistrationMsg(name, accessToken)
+	} else {
+		name = name
+	}
+	regMsg, err := client.CreateRegistrationMsg(name, []byte(key))
 	if err != nil {
 		return ("Couldn't marshal registration request!"), 500
+	}
+	if accessToken != "" {
+		req = []byte(fmt.Sprintf(`{"Auth": %s, "ConiksRequest": %s}`, req, regMsg))
+	} else {
+		req = regMsg
 	}
 
 	var res []byte

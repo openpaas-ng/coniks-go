@@ -59,13 +59,14 @@ func makeHandler(cmd *cobra.Command) func(w http.ResponseWriter, r *http.Request
 		cmd := args[0]
 		switch cmd {
 		case "register":
-			if len(args) != 3 {
-				msg := "[!] Incorrect number of args to register.\nUsage : register <name> <key>"
+			if len(args) != 4 {
+				msg := "[!] Incorrect number of args to register.\nUsage : register <name> <accessToken> <key>"
 				log.Printf(msg)
 				http.Error(w, fmt.Sprint(msg), http.StatusBadRequest)
 				return
 			}
-			msg, errCode := register(cc, conf, args[1], args[2])
+			nameAccesstoken := fmt.Sprintf("%s %s", args[1], args[2])
+			msg, errCode := register(cc, conf, nameAccesstoken, args[3])
 			httpErrorCode := errorCodeToHTTPError(errCode)
 			log.Printf("[+] Coniks protocol error code: %d - corresponding HTTP error code: %d - %s", errCode, httpErrorCode, msg)
 			http.Error(w, fmt.Sprintf("[+] %s", msg), httpErrorCode)
