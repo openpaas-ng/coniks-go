@@ -19,6 +19,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -63,6 +64,15 @@ type ExpectingDirProofsResponse struct {
 
 type ExpectingSTR struct {
 	Epoch uint64
+}
+
+type HTTPError struct {
+	Status string
+	Body   string
+}
+
+func (e HTTPError) Error() string {
+	return fmt.Sprintf("HTTP error code %v - %v", e.Status, e.Body)
 }
 
 // CreateTLSCert generates a new self-signed TLS certificate
@@ -195,6 +205,9 @@ func NewHTTPSClient(msg []byte, address string) ([]byte, error) {
 	defer resp.Body.Close()
 
 	body, _ := ioutil.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		return body, HTTPError{resp.Status, string(body)}
+	}
 	return body, nil
 }
 

@@ -67,7 +67,7 @@ func makeHandler(cmd *cobra.Command) func(w http.ResponseWriter, r *http.Request
 			}
 			msg, errCode := register(cc, conf, args[1], args[2])
 			httpErrorCode := errorCodeToHTTPError(errCode)
-			log.Printf("[+] Error code : %d, HTTP error code : %d, %s", errCode, httpErrorCode, msg)
+			log.Printf("[+] Coniks protocol error code: %d - corresponding HTTP error code: %d - %s", errCode, httpErrorCode, msg)
 			http.Error(w, fmt.Sprintf("[+] %s", msg), httpErrorCode)
 		case "lookup":
 			if len(args) != 2 {
@@ -78,7 +78,7 @@ func makeHandler(cmd *cobra.Command) func(w http.ResponseWriter, r *http.Request
 			}
 			msg, errCode := keyLookup(cc, conf, args[1])
 			httpErrorCode := errorCodeToHTTPError(errCode)
-			log.Printf("[+] Error code : %d, HTTP error code : %d, %s", errCode, httpErrorCode, msg)
+			log.Printf("[+] Coniks protocol error code: %d - corresponding HTTP error code: %d - %s", errCode, httpErrorCode, msg)
 			http.Error(w, fmt.Sprintf("[+] %s", msg), httpErrorCode)
 		default:
 			log.Printf("[!] Unrecognized command: %s", cmd)
@@ -87,7 +87,7 @@ func makeHandler(cmd *cobra.Command) func(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// Transform a CONIKS error code into HTTP Error code
+// Transform a CONIKS protocol error code into HTTP Error code
 // Success -> 200
 // NameNotFound -> 404 Not Found
 // NameAlreadyExists -> 409 Conflict
