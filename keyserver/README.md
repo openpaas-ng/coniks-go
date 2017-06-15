@@ -45,10 +45,12 @@ for "read-only" requests (lookups, monitoring etc).
 [policies]
 ...
 [[addresses]]
-    address = "tcp://public.server.address:port"
+    address = "tcp://public.server.address:port" # or "https://public.server.address:port"
     allow_registration = true
     cert = "server.pem"
     key = "server.key"
+[logger]
+...
 ```
 
 ### Run the server

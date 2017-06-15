@@ -132,6 +132,11 @@ func register(cc *p.ConsistencyChecks, conf *client.Config, name string, key str
 	}
 	u, _ := url.Parse(regAddress)
 	switch u.Scheme {
+	case "https":
+		res, err = testutil.NewHTTPSClient(req, regAddress)
+		if err != nil {
+			return ("Error while receiving response: " + err.Error()), 500
+		}
 	case "tcp":
 		res, err = testutil.NewTCPClient(req, regAddress)
 		if err != nil {
@@ -185,6 +190,11 @@ func keyLookup(cc *p.ConsistencyChecks, conf *client.Config, name string) (strin
 	var res []byte
 	u, _ := url.Parse(conf.Address)
 	switch u.Scheme {
+	case "https":
+		res, err = testutil.NewHTTPSClient(req, conf.Address)
+		if err != nil {
+			return ("Error while receiving response: " + err.Error()), 500
+		}
 	case "tcp":
 		res, err = testutil.NewTCPClient(req, conf.Address)
 		if err != nil {

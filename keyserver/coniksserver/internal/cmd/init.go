@@ -40,7 +40,7 @@ func init() {
 	initCmd.Flags().BoolP("cert", "c", false, "Generate self-signed ssl keys/cert with sane defaults")
 }
 
-func mkEthConfig(dir string) {	
+func mkEthConfig(dir string) {
 	file := path.Join(dir, "eth.toml")
 
 	var conf = eth.EtherConfig{
@@ -81,7 +81,12 @@ func mkConfig(dir string) {
 			EpochDeadline: 60,
 			VRFKeyPath:    "vrf.priv",
 			SignKeyPath:   "sign.priv",
-		},		
+		},
+		Logger: &utils.LoggerConfig{
+			EnableStacktrace: true,
+			Environment:      "development",
+			Path:             "coniksserver.log",
+		},
 	}
 
 	var confBuf bytes.Buffer
