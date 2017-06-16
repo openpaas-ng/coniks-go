@@ -9,6 +9,7 @@ import (
 
 	"log"
 
+	"github.com/coniks-sys/coniks-go/client"
 	p "github.com/coniks-sys/coniks-go/protocol"
 	"github.com/spf13/cobra"
 )
@@ -33,12 +34,21 @@ func init() {
 }
 
 func startLocalHTTPServer(cmd *cobra.Command) {
-	http.HandleFunc("/", makeHandler(cmd))
-	log.Println("Listening on http://localhost:3001")
-	http.ListenAndServe(":3001", nil)
+	conf := loadConfigOrExit(cmd)
+	if conf.ServerAddress == nil {
+		log.Fatal("Wrong config ! server-address is not specified in the config.toml.")
+	}
+	http.HandleFunc("/", makeHandler(conf))
+	address := conf.ServerAddress.Address
+	certPath, keyPath := conf.ServerAddress.TLSCertPath, conf.ServerAddress.TLSKeyPath
+	log.Printf("Listening on %v\n", address)
+	err := http.ListenAndServeTLS(address, certPath, keyPath, nil)
+	if err != nil {
+		log.Fatalln(err)
+	}
 }
 
-func makeHandler(cmd *cobra.Command) func(w http.ResponseWriter, r *http.Request) {
+func makeHandler(conf *client.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if isOriginAllowed(r.Header.Get("Origin")) {
 			log.Printf("Origin %s allowed\n", r.Header.Get("Origin"))
@@ -47,7 +57,6 @@ func makeHandler(cmd *cobra.Command) func(w http.ResponseWriter, r *http.Request
 		body, _ := ioutil.ReadAll(r.Body)
 		bodyStr := string(body)
 		log.Printf("Received request : %s\n", bodyStr)
-		conf := loadConfigOrExit(cmd)
 		cc := p.NewCC(nil, true, conf.SigningPubKey)
 		args := strings.Fields(bodyStr)
 		if len(args) < 1 {
