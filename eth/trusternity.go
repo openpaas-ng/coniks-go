@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"log"
 	"fmt"
 
 	"github.com/BurntSushi/toml"
@@ -34,9 +35,10 @@ func (trusternityObject *Trusternity) AuditSTR(epoch uint64) string {
 
 // PublishSTR get the latest STR and publish to Ethereum
 // This function should be called periodically after directory update at every Epoch
-func (trusternityObject *Trusternity) PublishSTR(str *protocol.DirSTR) {
+func (trusternityObject *Trusternity) PublishSTR(str *protocol.DirSTR) {	
 	digest := crypto.Digest(str.Signature)
 	trusternityObject.publish("1", str.Epoch, digest)
+	log.Printf("Trusternity: Publish at epoch %d Digest %s", str.Epoch, digest)
 }
 
 // LoadConfig loads Ethereum configuration from eth.toml
@@ -50,6 +52,10 @@ func loadConfig(file string) (*EtherConfig, error) {
 	conf.AccountAddress = utils.ResolvePath(conf.AccountAddress, file)
 	conf.EndpointURL = utils.ResolvePath(conf.EndpointURL, file)
 	conf.TrusternityContractAddress = utils.ResolvePath(conf.TrusternityContractAddress, file)
+
+	log.Printf("Trusternity: Sucessfully loaded EthConfig")
+	log.Printf("Trusternity: Account: %s", conf.AccountAddress)
+	log.Printf("Trusternity: Contract: %s", conf.TrusternityContractAddress)
 
 	conf.configFilePath = file
 	return conf, nil

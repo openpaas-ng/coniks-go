@@ -12,7 +12,7 @@ import (
 	"github.com/coniks-sys/coniks-go/client"
 	"github.com/coniks-sys/coniks-go/utils"
 	"github.com/spf13/cobra"
-	"github.com/tmp/keyserver/testutil"
+	//"github.com/tmp/keyserver/testutil"
 )
 
 var initCmd = &cobra.Command{
@@ -38,7 +38,7 @@ config file accordingly.
 		mkConfigOrExit(dir)
 		cert, err := strconv.ParseBool(cmd.Flag("cert").Value.String())
 		if err == nil && cert {
-			testutil.CreateTLSCert(dir)
+			//testutil.CreateTLSCert(dir)
 		}
 	},
 }

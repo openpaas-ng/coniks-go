@@ -50,6 +50,7 @@ func run(confPath string, ethEnabled bool, ethConfig string) {
 
 	serv := keyserver.NewConiksServer(conf)
 	if ethEnabled {
+		log.Printf("Enabled Trusternity Audit")		
 		serv.EnableTrusternityAudit(ethConfig)		
 	} 
 

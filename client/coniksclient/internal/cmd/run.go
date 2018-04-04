@@ -43,13 +43,17 @@ func init() {
 	RootCmd.AddCommand(runCmd)
 	runCmd.Flags().StringP("config", "c", "config.toml",
 		"Config file for the client (contains the server's initial public key etc).")
-	runCmd.Flags().BoolP("debug", "d", false, "Turn on debugging mode")
+	runCmd.Flags().BoolP("debug", "d", false, "Turn on debugging mode")	
 }
 
 func run(cmd *cobra.Command) {
 	isDebugging, _ := strconv.ParseBool(cmd.Flag("debug").Value.String())
 	conf := loadConfigOrExit(cmd)
 	cc := p.NewCC(nil, true, conf.SigningPubKey)
+
+	// Trusternity init for client
+	ethConfig := cmd.Flag("ethconfig").Value.String()
+	trustObject := eth.NewTrusternityObject(ethConfig)
 
 	state, err := terminal.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
@@ -111,8 +115,8 @@ func run(cmd *cobra.Command) {
 				writeLineInRawMode(term, "[!] Incorrect number of args to lookup.", isDebugging)
 				continue
 			}
-			epoch, _ := strconv.ParseUint(args[1], 10, 64)
-			msg := eth.AuditSTR(epoch)
+			epoch, _ := strconv.ParseUint(args[1], 10, 64)			
+			msg := trustObject.AuditSTR(epoch)
 			writeLineInRawMode(term, "[+] Query epoch "+args[1]+". STR: "+msg, isDebugging)
 		default:
 			writeLineInRawMode(term, "[!] Unrecognized command: "+cmd, isDebugging)
