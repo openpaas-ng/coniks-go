@@ -5,22 +5,25 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
 	"io/ioutil"
+	"log"
 	"net/http"
+
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 //CreatePostRequest create a http POST request to a host with a command body.
 func CreatePostRequest(url string, command []byte) string {
-	resp, err := http.Post("http://" + url, "application/json; charset=utf-8", bytes.NewBuffer(command))
+	resp, err := http.Post("http://"+url, "application/json; charset=utf-8", bytes.NewBuffer(command))
 	if err != nil {
-		fmt.Println(err.Error())		
+		fmt.Println(err.Error())
 	}
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
 
 	var rep rpcResponse
 	json.Unmarshal(body, &rep)
+	log.Printf("Trusternity: %s", rep.Result)
 	return rep.Result
 }
 
@@ -51,6 +54,7 @@ func makeEthSendRequest(config *EtherConfig, data []byte) []byte {
 		Params:  []transaction{transObject},
 	}
 	req, _ := json.Marshal(request)
+	log.Printf("Trusternity: makeEthSendRequest %s", request)
 	return req
 }
 
@@ -69,5 +73,7 @@ func makeEthCallRequest(config *EtherConfig, data []byte) []byte {
 		Params:  []interface{}{transObject, "latest"},
 	}
 	req, _ := json.Marshal(request)
+	log.Printf("Trusternity: makeEthCallRequest %s", request)
+
 	return req
 }

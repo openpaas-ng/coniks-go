@@ -1,8 +1,9 @@
 package eth
 
 import (
-	"log"
+	"encoding/hex"
 	"fmt"
+	"log"
 
 	"github.com/BurntSushi/toml"
 	"github.com/coniks-sys/coniks-go/crypto"
@@ -35,10 +36,11 @@ func (trusternityObject *Trusternity) AuditSTR(epoch uint64) string {
 
 // PublishSTR get the latest STR and publish to Ethereum
 // This function should be called periodically after directory update at every Epoch
-func (trusternityObject *Trusternity) PublishSTR(str *protocol.DirSTR) {	
+func (trusternityObject *Trusternity) PublishSTR(str *protocol.DirSTR) {
 	digest := crypto.Digest(str.Signature)
 	trusternityObject.publish("1", str.Epoch, digest)
-	log.Printf("Trusternity: Publish at epoch %d Digest %s", str.Epoch, digest)
+
+	log.Printf("Trusternity: Publish at epoch %d Digest %s", str.Epoch, hex.EncodeToString(digest))
 }
 
 // LoadConfig loads Ethereum configuration from eth.toml

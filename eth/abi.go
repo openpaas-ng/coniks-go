@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -93,6 +94,7 @@ func (trusternityObject *Trusternity) publish(id string, epoch uint64, STR []byt
 		Params:  []transaction{transObject},
 	}
 	req, _ := json.Marshal(request)
+	log.Printf("Trusternity: publish %s", request)
 
 	resp := CreatePostRequest(trusternityObject.config.EndpointURL, req)
 	return resp
@@ -139,4 +141,12 @@ func (trusternityObject *Trusternity) GetSTR(id string, epoch uint64, address st
 	request := makeEthCallRequest(trusternityObject.config, buffer.Bytes())
 	resp := CreatePostRequest(trusternityObject.config.EndpointURL, request)
 	return resp
+}
+
+func Reverse(s string) string {
+	r := []rune(s)
+	for i, j := 0, len(r)-1; i < len(r)/2; i, j = i+1, j-1 {
+		r[i], r[j] = r[j], r[i]
+	}
+	return string(r)
 }
