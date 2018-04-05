@@ -52,6 +52,20 @@ For detail usage instructions for the CONIKS server, see the documentation in th
 
 ### Trusternity Client
 
+Similar to Trusternity Server, we need to turn on ethereum mode in the client as
+
+```bash
+coniksclient -e -t "path to eth.toml"
+```
+
+Then we add a REPL command for the CONIKS client.
+
+```bash
+audit $epoch
+```
+
+where we can replace $epoch with the corresponding epoch number. The client then download and extract 
+
 ### 3. Test Net
 
 In order to build a private Ethereum Test Network, you can find the instructions [here](https://github.com/ethereum/go-ethereum)

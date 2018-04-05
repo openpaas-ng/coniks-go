@@ -43,7 +43,9 @@ func init() {
 	RootCmd.AddCommand(runCmd)
 	runCmd.Flags().StringP("config", "c", "config.toml",
 		"Config file for the client (contains the server's initial public key etc).")
-	runCmd.Flags().BoolP("debug", "d", false, "Turn on debugging mode")	
+	runCmd.Flags().BoolP("debug", "d", false, "Turn on debugging mode")
+	runCmd.Flags().StringP("ethconfig", "t", "eth.toml", "Path to ethereum configuration file")
+	runCmd.Flags().BoolP("eth", "e", false, "Enable auditing with Ethereum")
 }
 
 func run(cmd *cobra.Command) {
@@ -52,6 +54,8 @@ func run(cmd *cobra.Command) {
 	cc := p.NewCC(nil, true, conf.SigningPubKey)
 
 	// Trusternity init for client
+
+	auditEnabled, _ := strconv.ParseBool(cmd.Flag("eth").Value.String())
 	ethConfig := cmd.Flag("ethconfig").Value.String()
 	trustObject := eth.NewTrusternityObject(ethConfig)
 
@@ -111,13 +115,17 @@ func run(cmd *cobra.Command) {
 			msg, _ := keyLookup(cc, conf, args[1])
 			writeLineInRawMode(term, "[+] "+msg, isDebugging)
 		case "audit":
-			if len(args) != 2 {
-				writeLineInRawMode(term, "[!] Incorrect number of args to lookup.", isDebugging)
-				continue
+			if auditEnabled {
+				if len(args) != 2 {
+					writeLineInRawMode(term, "[!] Incorrect number of args to lookup.", isDebugging)
+					continue
+				}
+				epoch, _ := strconv.ParseUint(args[1], 10, 64)
+				msg := trustObject.AuditSTR(epoch)
+				writeLineInRawMode(term, "[+] Query epoch "+args[1]+". STR: "+msg, isDebugging)
+			} else {
+				writeLineInRawMode(term, "[+] Please enable ethereum mode", isDebugging)
 			}
-			epoch, _ := strconv.ParseUint(args[1], 10, 64)			
-			msg := trustObject.AuditSTR(epoch)
-			writeLineInRawMode(term, "[+] Query epoch "+args[1]+". STR: "+msg, isDebugging)
 		default:
 			writeLineInRawMode(term, "[!] Unrecognized command: "+cmd, isDebugging)
 		}
