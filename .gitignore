@@ -32,6 +32,7 @@ _testmain.go
 
 # CONIKS server
 config.toml
+eth.toml
 botconfig.toml
 sign.priv
 sign.pub
@@ -41,3 +42,4 @@ server.key
 server.pem
 coniks.db/
 coniks.pid
+coniksserver.log

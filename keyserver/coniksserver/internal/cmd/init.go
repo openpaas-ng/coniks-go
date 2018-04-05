@@ -9,6 +9,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/coniks-sys/coniks-go/crypto/sign"
 	"github.com/coniks-sys/coniks-go/crypto/vrf"
+	"github.com/coniks-sys/coniks-go/eth"
 	"github.com/coniks-sys/coniks-go/keyserver"
 	"github.com/coniks-sys/coniks-go/keyserver/testutil"
 	"github.com/coniks-sys/coniks-go/utils"
@@ -25,7 +26,7 @@ var initCmd = &cobra.Command{
 		mkConfig(dir)
 		mkSigningKey(dir)
 		mkVrfKey(dir)
-
+		mkEthConfig(dir)
 		cert, err := strconv.ParseBool(cmd.Flag("cert").Value.String())
 		if err == nil && cert {
 			testutil.CreateTLSCert(dir)
@@ -37,6 +38,26 @@ func init() {
 	RootCmd.AddCommand(initCmd)
 	initCmd.Flags().StringP("dir", "d", ".", "Location of directory for storing generated files")
 	initCmd.Flags().BoolP("cert", "c", false, "Generate self-signed ssl keys/cert with sane defaults")
+}
+
+func mkEthConfig(dir string) {
+	file := path.Join(dir, "eth.toml")
+
+	var conf = eth.EtherConfig{
+		EndpointURL:                "127.0.0.1:",
+		AccountAddress:             "",
+		TrusternityContractAddress: "",
+	}
+
+	var confBuf bytes.Buffer
+
+	e := toml.NewEncoder(&confBuf)
+	err := e.Encode(conf)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	utils.WriteFile(file, confBuf.Bytes(), 0644)
 }
 
 func mkConfig(dir string) {
@@ -52,6 +73,7 @@ func mkConfig(dir string) {
 			TLSKeyPath:  "server.key",
 		},
 	}
+
 	var conf = keyserver.ServerConfig{
 		LoadedHistoryLength: 1000000,
 		Addresses:           addrs,
@@ -59,6 +81,11 @@ func mkConfig(dir string) {
 			EpochDeadline: 60,
 			VRFKeyPath:    "vrf.priv",
 			SignKeyPath:   "sign.priv",
+		},
+		Logger: &utils.LoggerConfig{
+			EnableStacktrace: true,
+			Environment:      "development",
+			Path:             "coniksserver.log",
 		},
 	}
 
