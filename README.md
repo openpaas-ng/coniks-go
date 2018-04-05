@@ -58,13 +58,13 @@ Similar to Trusternity Server, we need to turn on ethereum mode in the client as
 coniksclient -e -t "path to eth.toml"
 ```
 
-Then we add a REPL command for the CONIKS client.
+Then we can perform audit for a specific epoch by using a REPL command
 
 ```bash
 audit $epoch
 ```
 
-where we can replace $epoch with the corresponding epoch number. The client then download and extract 
+where we can replace $epoch with the corresponding epoch number. The client then download and extract the published **STR** via Geth.
 
 ### 3. Test Net
 
